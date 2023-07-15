@@ -1,63 +1,74 @@
-import sys
-import yaml
-import boto3
-import urllib
 import datetime
-import time
+import ipaddress
+import sys
+import tomllib
+import urllib
+from pprint import pprint
+
+import boto3
+from mypy_boto3_route53 import Route53Client
 
 
-def _get_config_from_file(filename):
+def _get_config_from_file(filename: str) -> dict:
     config = {}
-    with open(filename, "r") as stream:
-        config = yaml.load(stream, Loader=yaml.SafeLoader)
+    with open(filename, "rb") as stream:
+        config = tomllib.load(stream)
     return config
 
 
-def _get_route53_client(aws_profile):
+def _get_route53_client(aws_profile) -> Route53Client:
     boto_session = boto3.Session(profile_name=aws_profile)
     return boto_session.client("route53")
 
 
-def _get_public_ip():
+def _get_public_ip() -> ipaddress.IPv4Address:
     try:
         public_ip = (
             urllib.request.urlopen("http://checkip.amazonaws.com/")
             .read()
             .decode("utf8")
         )
-        return public_ip.strip()
-    except:
-        return None
+        return ipaddress.ip_address(public_ip.strip())
+    except Exception as e:
+        print("Error retrieving public ip:\n", e)
+        sys.exit(1)
 
 
-def _get_configured_ip(client, zone_id, hostname):
+def _get_configured_ip(client, zone_id, hostname) -> ipaddress.IPv4Address:
     response = client.test_dns_answer(
         HostedZoneId=zone_id,
         RecordName=hostname,
         RecordType="A",
     )
     if response["RecordData"]:
-        return response["RecordData"][0]
+        return ipaddress.ip_address(response["RecordData"][0])
     else:
         return None
 
 
-def _get_timestamp():
-    now_utc = datetime.utcfromtimestamp(int(time.time))
-    return now_utc.strftime("%Y-%m-%d %H:%M:%S %Z%z")
+def _get_timestamp() -> str:
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    return utc_now.strftime("%Y-%m-%d %H:%M:%S %Z%z")
 
 
-def host_needs_update(client, zone_id, hostname, public_ip):
+def host_needs_update(
+    client: Route53Client, zone_id: str, hostname: str, public_ip: ipaddress.IPv4Address
+) -> bool:
     host_ip = _get_configured_ip(client, zone_id, hostname)
     if host_ip is None:
-        print("{}: No ip configured.".format(hostname))
+        print(f"{hostname}: No ip configured.")
     else:
-        print("{}: Configured ip is {}".format(hostname, host_ip))
+        print(f"{hostname}: Configured ip is {host_ip}")
     return host_ip != public_ip
 
 
-def update_dns_record(client, zone_id, hostname, ip, ttl):
-    print("{}: Updating IP address.".fpormat(hostname))
+def update_dns_record(
+    client: Route53Client,
+    zone_id: str,
+    hostname: str,
+    ip: ipaddress.IPv4Address,
+    ttl: int,
+):
     dns_change_batch = {
         "Changes": [
             {
@@ -65,7 +76,7 @@ def update_dns_record(client, zone_id, hostname, ip, ttl):
                 "ResourceRecordSet": {
                     "Name": hostname + ".",
                     "Type": "A",
-                    "ResourceRecords": [{"Value": ip}],
+                    "ResourceRecords": [{"Value": str(ip)}],
                     "TTL": ttl,
                 },
             },
@@ -75,51 +86,44 @@ def update_dns_record(client, zone_id, hostname, ip, ttl):
                     "Name": hostname + ".",
                     "Type": "TXT",
                     "ResourceRecords": [
-                        {"Value": '"Last updated: {}"'.format(_get_timestamp())}
+                        {"Value": f'"Last updated: {_get_timestamp()}"'}
                     ],
                     "TTL": ttl,
                 },
             },
         ]
     }
-    print(dns_change_batch)
-    response = client.change_resource_record_sets(
-        HostedZoneId=zone_id, ChangeBatch=dns_change_batch
-    )
-    return response
+    if DEBUG_LOG:
+        pprint(dns_change_batch, indent=2, compact=True)
+    if not DRY_RUN:
+        response = client.change_resource_record_sets(
+            HostedZoneId=zone_id, ChangeBatch=dns_change_batch
+        )
+        pprint(response)
 
 
 if __name__ == "__main__":
+    global DRY_RUN
+    global DEBUG_LOG
+
     # get config
     config = _get_config_from_file(sys.argv[1])
-    # print("Current configuration:\n", yaml.dump(config, default_flow_style=False))
+    DRY_RUN = not config["general"]["commit-changes"]
+    DEBUG_LOG = config["general"]["log"]["debug"]
+    if DEBUG_LOG:
+        pprint(config)
 
-    # config variables
-    aws_profile = config["aws"]["profile"]
-    default_ttl = config["aws"]["default-ttl"]
-
-    # Get our current public ip.
     public_ip = _get_public_ip()
-    if public_ip is None:
-        print("Error retrieving public ip.")
-        sys.exit(1)
+    r53_client = _get_route53_client(config["aws"]["profile"])
+
+    hostname = str(config["dns"]["hostname"])
+    zone_id = str(config["dns"]["zone-id"])
+    ttl = int(config["dns"]["ttl"])
+
+    print(f"{hostname}: checking configured ip.")
+    needs_update = host_needs_update(r53_client, zone_id, hostname, public_ip)
+    if needs_update:
+        print(f"{hostname}: configuring new ip: {public_ip}")
+        update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
     else:
-        print("Public IP is: {}".format(public_ip))
-
-    # start boto Session
-    r53_client = _get_route53_client(aws_profile)
-
-    for zone_name, zone in config["zones"].items():
-        print("Updating hosts in zone: {} ({})".format(zone_name, zone["zone-id"]))
-        for host in zone["hosts"]:
-            print("Checking host: {}", host["hostname"])
-            needs_update = host_needs_update(
-                r53_client, zone["zone-id"], host["hostname"], public_ip
-            )
-            if needs_update:
-                update_dns_record(
-                    zone["zone-id"],
-                    host["hostname"],
-                    public_ip,
-                    host.get("ttl", default_ttl),
-                )
+        print(f"{hostname}: configured ip has not changed, skipping.")
