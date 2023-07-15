@@ -1,0 +1,19 @@
+[general]
+  # Set to true to call AWS to commit IP changes
+  commit-changes=false
+[general.log]
+  # Set to true to enable additional debug logging
+  # (config data, aws request & response data)
+  debug=false
+
+[aws]
+  # aws profile name to use
+  # best practice is setting up a separate IAM user & access key,
+  # with a specific profile used for this app.
+  profile="default"
+
+[dns]
+  # DNS info to update in aws
+  hostname="your.hostname.com"
+  zone-id="YOURZONEID"
+  ttl=3600
