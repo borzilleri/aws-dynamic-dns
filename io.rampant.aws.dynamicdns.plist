@@ -5,6 +5,9 @@
         <key>Label</key>
         <string>io.rampant.aws.dynamicdns</string>
 
+        <key>WorkingDirectory</key>
+        <string>/opt/aws-dynamic-dns/</string>
+
         <key>Program</key>
         <string>/opt/aws-dynamic-dns/update-dns.sh</string>
 
