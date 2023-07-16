@@ -2,6 +2,8 @@
 
 Dynamic DNS update script for AWS Route53. (Yeah, what it says on the tin).
 
+This will use [checkip.amazonaws.com](http://checkip.amazonaws.com) to check the public IP Address of the machine this script is run on. It will compare that to the configured address of the hostname set in the config file. If they differ, it will issue an UPSERT request to AWS to update the A record. Additionally a TXT record will be added indicating the date when the record was last updated by this script.
+
 ## Configuraiton
 
 1. Set up AWS IAM User
@@ -29,3 +31,9 @@ edit it with your information.
         launchctl load /Library/LaunchDaemons/io.rampant.aws.dynamicdns.plist
     
     Alternately you may use `cron`, or whatever system-specific utilities your OS has.
+
+
+## TODO
+
+* Support IPv6
+* Maybe support arbitrary TXT records/data?
