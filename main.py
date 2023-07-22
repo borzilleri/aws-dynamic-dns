@@ -8,6 +8,8 @@ from pprint import pprint
 import boto3
 from mypy_boto3_route53 import Route53Client
 
+DEFAULT_AWS_REGION = "us-west-2"
+
 
 def _get_config_from_file(filename: str) -> dict:
     config = {}
@@ -111,7 +113,10 @@ if __name__ == "__main__":
     zone_id = str(config["dns"]["zone-id"])
     ttl = int(config["dns"]["ttl"])
 
-    r53_client = _get_route53_client(config["aws"]["profile"])
+    r53_client = _get_route53_client(
+        config["aws"].get("profile", "default"),
+        config["aws"].get("region", DEFAULT_AWS_REGION),
+    )
 
     public_ip = _get_public_ip()
     host_ip = _get_configured_ip(r53_client, zone_id, hostname)
