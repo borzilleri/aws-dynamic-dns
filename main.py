@@ -16,8 +16,8 @@ def _get_config_from_file(filename: str) -> dict:
     return config
 
 
-def _get_route53_client(aws_profile) -> Route53Client:
-    boto_session = boto3.Session(profile_name=aws_profile)
+def _get_route53_client(aws_profile: str, aws_region: str) -> Route53Client:
+    boto_session = boto3.Session(profile_name=aws_profile, region_name=aws_region)
     return boto_session.client("route53")
 
 
@@ -117,7 +117,9 @@ if __name__ == "__main__":
     host_ip = _get_configured_ip(r53_client, zone_id, hostname)
 
     if public_ip == host_ip:
-        print(f"{hostname}: Configured address matches public address, skipping update.")
+        print(
+            f"{hostname}: Configured address matches public address, skipping update."
+        )
     else:
         print(f"{hostname}: Configuring new IP Address: {str(public_ip)}")
         update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)

@@ -11,6 +11,7 @@
   # best practice is setting up a separate IAM user & access key,
   # with a specific profile used for this app.
   profile="default"
+  region="us-west-2"
 
 [dns]
   # DNS info to update in aws
