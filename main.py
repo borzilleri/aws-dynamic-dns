@@ -1,14 +1,17 @@
+import argparse
 import datetime
 import ipaddress
 import sys
 import tomllib
-import urllib
+import urllib.request
 from pprint import pprint
 
 import boto3
 from mypy_boto3_route53 import Route53Client
 
 DEFAULT_AWS_REGION = "us-west-2"
+DRY_RUN = False
+DEBUG_LOG = False
 
 
 def _get_config_from_file(filename: str) -> dict:
@@ -96,14 +99,21 @@ def update_dns_record(
             HostedZoneId=zone_id, ChangeBatch=dns_change_batch
         )
         pprint(response)
+    else:
+        print("Dry-Run Enabled. Not committing changes.")
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config")
+    parser.add_argument("--force", "-f", action="store_true")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    global DRY_RUN
-    global DEBUG_LOG
-
     # get config
-    config = _get_config_from_file(sys.argv[1])
+    args = parse_arguments()
+    config = _get_config_from_file(args.config)
     DRY_RUN = not config["general"]["commit-changes"]
     DEBUG_LOG = config["general"]["log"]["debug"]
     if DEBUG_LOG:
@@ -121,10 +131,10 @@ if __name__ == "__main__":
     public_ip = _get_public_ip()
     host_ip = _get_configured_ip(r53_client, zone_id, hostname)
 
-    if public_ip == host_ip:
+    if public_ip != host_ip or args.force:
+        print(f"{hostname}: Configuring new IP Address: {str(public_ip)}")
+        update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
+    else:
         print(
             f"{hostname}: Configured address matches public address, skipping update."
         )
-    else:
-        print(f"{hostname}: Configuring new IP Address: {str(public_ip)}")
-        update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
