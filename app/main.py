@@ -1,17 +1,21 @@
 import argparse
 import datetime
 import ipaddress
+import json
 import sys
 import tomllib
 import urllib.request
+from pathlib import Path
 from pprint import pprint
 
 import boto3
 from mypy_boto3_route53 import Route53Client
 
+DEFAULT_PROFILE = "default"
 DEFAULT_AWS_REGION = "us-west-2"
 DRY_RUN = False
 DEBUG_LOG = False
+FORCE_COMMIT = False
 
 
 def _get_config_from_file(filename: str) -> dict:
@@ -21,8 +25,19 @@ def _get_config_from_file(filename: str) -> dict:
     return config
 
 
-def _get_route53_client(aws_profile: str, aws_region: str) -> Route53Client:
-    boto_session = boto3.Session(profile_name=aws_profile, region_name=aws_region)
+def _load_credentials(credentials_file: str, profile: str) -> dict:
+    if credentials_file:
+        print(f"reading creds file {credentials_file}")
+        p = Path(credentials_file)
+        if p.is_file():
+            with p.open() as f:
+                print("loading credntials")
+                return json.load(f)
+    return {"profile_name": profile}
+
+
+def _get_route53_client(aws_region: str, credentials: dict) -> Route53Client:
+    boto_session = boto3.Session(region_name=aws_region, **credentials)
     return boto_session.client("route53")
 
 
@@ -106,32 +121,36 @@ def update_dns_record(
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("config")
-    parser.add_argument("--force", "-f", action="store_true")
+    parser.add_argument("--credentials", "-c")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    # get config
     args = parse_arguments()
     config = _get_config_from_file(args.config)
     DRY_RUN = not config["general"]["commit-changes"]
+    FORCE_COMMIT = config["general"]["force-commit"]
     DEBUG_LOG = config["general"]["log"]["debug"]
     if DEBUG_LOG:
+        pprint(args)
         pprint(config)
+
+    credentials = _load_credentials(
+        args.credentials, config["aws"].get("profile", DEFAULT_PROFILE)
+    )
 
     hostname = str(config["dns"]["hostname"])
     zone_id = str(config["dns"]["zone-id"])
     ttl = int(config["dns"]["ttl"])
 
     r53_client = _get_route53_client(
-        config["aws"].get("profile", "default"),
-        config["aws"].get("region", DEFAULT_AWS_REGION),
+        config["aws"].get("region", DEFAULT_AWS_REGION), credentials
     )
 
     public_ip = _get_public_ip()
     host_ip = _get_configured_ip(r53_client, zone_id, hostname)
 
-    if public_ip != host_ip or args.force:
+    if public_ip != host_ip or FORCE_COMMIT:
         print(f"{hostname}: Configuring new IP Address: {str(public_ip)}")
         update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
     else:

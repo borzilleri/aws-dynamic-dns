@@ -12,16 +12,26 @@ This will use [checkip.amazonaws.com](http://checkip.amazonaws.com) to check the
     
 2. Set up AWS credentials.
 
-    Create an access key for the IAM user you set up and configure your aws credentials file with a profile and that key. Use a distinct profile name like `aws-dynamic-dns`
-
-3. Copy the [config template](config.template.toml) to `config.toml` somewhere and 
-edit it with your information.
-
-4. Run the script
-
-        pipenv run python3 main.py /path/to/config.toml
+    Create an access key for the IAM user you set up and download/construct a 
+    json file with the credential data:
     
-    Or, alternately just run the [update-dns.sh](update-dns.sh) script.
+```json
+{
+    "aws_access_key_id": "...",
+    "aws_secret_access_key": "..."
+}
+```
+
+3. Create config.toml
+
+    Copy the [config template](config.template.toml) to `config.toml`, and edit
+    it with information appropriate to your aws account.
+
+4. Run the app via the compose file:
+
+```bash
+docker compose run --rm app
+```
 
 5. (Optional) set up automatic running
 
@@ -37,3 +47,4 @@ edit it with your information.
 
 * Support IPv6
 * Maybe support arbitrary TXT records/data?
+* Multiple zone/records?

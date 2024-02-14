@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: app/
+    volumes:
+      - config.toml:/config.toml:ro
+    secrets:
+      - aws-credentials
+secrets:
+  aws-credentials:
+    file: aws-credentials.json

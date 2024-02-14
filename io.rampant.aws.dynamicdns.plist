@@ -9,7 +9,7 @@
         <string>/opt/aws-dynamic-dns/</string>
 
         <key>Program</key>
-        <string>/opt/aws-dynamic-dns/update-dns.sh</string>
+        <string>docker compose run --rm app</string>
 
         <key>StartCalendarInterval</key>
         <dict>

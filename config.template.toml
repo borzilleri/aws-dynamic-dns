@@ -1,6 +1,11 @@
 [general]
   # Set to true to call AWS to commit IP changes
   commit-changes=false
+  # Normally changes will not be committed to AWS if your IP has not changed,
+  # If this value is true, updated records will be committed regardless.
+  # NOTE: This still respects the above `commit-changes` flag.
+  force-commit=false
+
 [general.log]
   # Set to true to enable additional debug logging
   # (config data, aws request & response data)
@@ -8,6 +13,7 @@
 
 [aws]
   # aws profile name to use
+  # This is only used when a credentials json file is not provided.
   # best practice is setting up a separate IAM user & access key,
   # with a specific profile used for this app.
   profile="default"
