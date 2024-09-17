@@ -24,3 +24,8 @@
   hostname="your.hostname.com"
   zone-id="YOURZONEID"
   ttl=3600
+
+[healthcheck]
+  # Set this to either the UUID or the "ping-key/slug" of your
+  # healthchecks.io check.
+  id = "healthcheck.io uuid or key/slug"

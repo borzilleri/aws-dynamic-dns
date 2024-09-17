@@ -1,3 +1,4 @@
+from . import hcio
 import argparse
 import datetime
 import ipaddress
@@ -9,6 +10,8 @@ from pathlib import Path
 from pprint import pprint
 
 import boto3
+import botocore
+
 from mypy_boto3_route53 import Route53Client
 
 DEFAULT_PROFILE = "default"
@@ -82,7 +85,7 @@ def update_dns_record(
     hostname: str,
     ip: ipaddress.IPv4Address,
     ttl: int,
-):
+) -> str | None:
     dns_change_batch = {
         "Changes": [
             {
@@ -110,10 +113,14 @@ def update_dns_record(
     if DEBUG_LOG:
         pprint(dns_change_batch, indent=2, width=120)
     if not DRY_RUN:
-        response = client.change_resource_record_sets(
-            HostedZoneId=zone_id, ChangeBatch=dns_change_batch
-        )
-        pprint(response)
+        try:
+            response = client.change_resource_record_sets(
+                HostedZoneId=zone_id, ChangeBatch=dns_change_batch
+            )
+            pprint(response)
+        except botocore.exceptions.ClientError as error:
+            print(f"Error updating Route53: {error}")
+            return f"{error.response['Error']['Code']} - {error.response['Error']['Message']}"
     else:
         print("Dry-Run Enabled. Not committing changes.")
 
@@ -128,12 +135,16 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     config = _get_config_from_file(args.config)
+    healthcheck = hcio.HealthCheck(config["healthcheck"]["id"])
     DRY_RUN = not config["general"]["commit-changes"]
     FORCE_COMMIT = config["general"]["force-commit"]
     DEBUG_LOG = config["general"]["log"]["debug"]
     if DEBUG_LOG:
         pprint(args)
         pprint(config)
+    
+    if not DRY_RUN:
+        healthcheck.start()
 
     credentials = _load_credentials(
         args.credentials, config["aws"].get("profile", DEFAULT_PROFILE)
@@ -150,10 +161,16 @@ if __name__ == "__main__":
     public_ip = _get_public_ip()
     host_ip = _get_configured_ip(r53_client, zone_id, hostname)
 
+    errorResult = None
     if public_ip != host_ip or FORCE_COMMIT:
         print(f"{hostname}: Configuring new IP Address: {str(public_ip)}")
-        update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
+        errorResult = update_dns_record(r53_client, zone_id, hostname, public_ip, ttl)
     else:
         print(
             f"{hostname}: Configured address matches public address, skipping update."
         )
+    if not DRY_RUN:
+        if errorResult:
+            healthcheck.fail()
+        else:
+            healthcheck.success()
