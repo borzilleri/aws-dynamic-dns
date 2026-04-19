@@ -1,3 +1,7 @@
+# ARCHIVAL NOTICE
+
+This repo has been archived and is not maintained.
+
 # aws-dynamic-dns
 
 Dynamic DNS update script for AWS Route53. (Yeah, what it says on the tin).
